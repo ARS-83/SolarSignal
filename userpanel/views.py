@@ -5,10 +5,11 @@ from rest_framework.response import Response
 from rest_framework.request import Request
 from rest_framework import status
 from django.contrib.auth import authenticate
-from .models import CustomUser
+from .models import CustomUser,Signal
 from asgiref.sync import sync_to_async
 from adrf.decorators import api_view
-
+import json
+import datetime
 @api_view(['POST'])
 @permission_classes([AllowAny])
 async def register(request: Request):
@@ -58,3 +59,23 @@ async def check_login(request: Request):
         return Response({'success': True, 'message': 'user is logged in'}, status=status.HTTP_200_OK)
     else:
         return Response({'success': False, 'message': 'user is not logged in'}, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+async def get_signals(request: Request):
+    if request.user.is_authenticated:    
+        if CustomUser.objects.filter(username=request.user.username).exists():
+            user = CustomUser.object.get(username=request.user.username)
+            if user.is_block:
+                return Response({'success': False, 'error': 'کاربر مسدود شده است'}, status=status.HTTP_403_FORBIDDEN)
+            
+            if user.subscription is None:
+                return Response({'success': False, 'error': 'شما در یک اشتراک نیستید'}, status=status.HTTP_403_FORBIDDEN)
+            if user.end_date_sub < datetime.datetime.now():
+                return Response({'success': False, 'error': 'اشتراک شما به پایان رسیده است'}, status=status.HTTP_403_FORBIDDEN)
+            signals = await sync_to_async(Signal.objects.all)()
+            return Response({'success': True, 'signals': json.dumps(list(signals))}, status=status.HTTP_200_OK)
+
+        else:
+            return Response({'success': False, 'error': 'کاربر یافت نشد'}, status=status.HTTP_404_NOT_FOUND)
+    else:
+        return Response({'success': False, 'error': 'کاربر وارد نشده است'}, status=status.HTTP_401_UNAUTHORIZED)    
